@@ -240,6 +240,11 @@
 						result 		= this.sendMsg(player, msg);
 					break;
 
+					case 'xp':
+						var msg 	= "XP: " + this.playerXP();
+						result 		= this.sendMsg(player, msg);
+					break;
+
 				}
 
 				this.callback_post_command(player, result);
@@ -262,78 +267,23 @@
 			}
 
 
-		/** XP  
-		 * Leveling
+		/**
+		 * Player
 		 */
 		
-
-		 	/**
-		 	 * Player Gain XP
-		 	 * @param  {[type]} player
-		 	 * @param  {[type]} xpType
-		 	 * @return {[type]}
-		 	 */
-			this.playerGainXP 		= function(player, xpType) {
-
-				var scale 			= parseInt(this.config('xp', 'scale'));
-				var cXP 			= parseInt(this.getPlayerProp(player, 'xp'));
-				var cLevel 			= (cXP / scale).round();
-
-				if (cXP <= 0) 		cXP 	= 0;
-				if (cLevel <= 1) 	cLevel 	= 1;
-
-				var inc 			= parseInt(this.config('xp', xpType));
-				var pXP 			= (inc / scale) * cLevel).round();
-				var nXP 			= (pXP + cXP);
-
-				var playerXP 		= parseInt(this.savePlayerProp(player, 'xp', nXP));
-				var newLevel 		= (playerXP / scale).round();
-
-				if (newLevel != cLevel) {
-					this
-						.sendMsg(player, "NOW LEVEL " + newLevel + "!")
-						.sendMsg(player, "XP: " + playerXP)
-					;
-				}
-
-				this.callback_xp_gain(player, playerXP, newLevel);
-
-				return this;
-			}
-
-
 			/**
-			 * Player Lose XP
+			 * Player XP
 			 * @param  {[type]} player
-			 * @param  {[type]} xpType
 			 * @return {[type]}
 			 */
-			this.playerLoseXP		= function(player, xpType) {
-				var scale 			= parseInt(this.config('xp', 'scale'));
-				var cXP 			= parseInt(this.getPlayerProp(player, 'xp'));
-				var cLevel 			= (cXP / scale).round();
+			this.playerXP 		= function(player) {
+				var store 	= this.store();
+				var xp 		= store.GetSetting(player.GameID, "xp");
 
-				if (cXP <= 0) 		cXP 	= 0;
-				if (cLevel <= 1) 	cLevel 	= 1;
-
-				var inc 			= parseInt(this.config('xp', xpType));
-				var pXP 			= (inc / scale) * cLevel).round();
-				var nXP 			= (pXP - cXP);
-
-				var playerXP 		= parseInt(this.savePlayerProp(player, 'xp', nXP));
-				var newLevel 		= (playerXP / scale).round();
-
-				if (newLevel != cLevel) {
-					this
-						.sendMsg(player, "NOW LEVEL " + newLevel + "!")
-						.sendMsg(player, "XP: " + playerXP)
-					;
-				}
-
-				this.callback_xp_lost(player, playerXP, newLevel);
-
-				return this;
+				if (!xp || parseInt(xp) <= 0) xp = 1;
+				return xp;
 			}
+		
 		
 
 		/** Attacking
@@ -348,10 +298,8 @@
 			 */
 			this.playerHurt 	= function(player, hurtEvent) {
 
-				this
-					.playerLoseXP(player, 'player_hurt')
-					.callback_player_hurt(player, hurtEvent)
-				;
+				//this.playerLoseXP(player, 'player_hurt');
+				this.callback_player_hurt(player, hurtEvent);
 
 				return this;
 			}
@@ -365,10 +313,9 @@
 			 */
 			this.playerKilled 		= function(player, deathEvent) {
 
-				this
-					.playerLoseXP(player, 'player_killed');
-					.callback_player_death(player, deathEvent)
-				;
+				//this.playerLoseXP(player, 'player_killed');
+				this.callback_player_death(player, deathEvent);
+
 				return this;
 			}
 
@@ -382,10 +329,8 @@
 			 */
 			this.npcKilled 	= function(player, npc, deathEvent) {
 
-				this
-					.playerGainXP(player, 'npc_killed')
-					.callback_npc_killed(player, npc, deathEvent)
-				;
+				//this.playerGainXP(player, 'npc_killed');
+				this.callback_npc_killed(player, npc, deathEvent);				
 
 				return this;	
 			}
@@ -400,10 +345,8 @@
 			 */
 			this.npcHurt 		= function(player, npc, hurtEvent) {
 
-				this
-					.playerGainXP(player, 'npc_hurt')
-					.callback_npc_hurt(player, npc, hurtEvent)
-				;
+				//this.playerGainXP(player, 'npc_hurt');
+				this.callback_npc_hurt(player, npc, hurtEvent);
 
 				return this;
 			}
@@ -442,7 +385,7 @@
 		var npc 	= hurtEvent.Attacker;
 
 		var hText 	=
-			npc.Name + 
+			npc.Name 				+ 
 			" hit you with " 		+
 			hurtEvent.DamageType 	+
 			" damage for " 			+
@@ -454,10 +397,6 @@
 			.playerHurt(player, hurtEvent)
 			.sendMsg(player, hText, 'player')
 		; //End With
-	}
-
-	function On_PlayerGathering() {
-
 	}
 
 	function On_NPCKilled(deathEvent) {
@@ -495,9 +434,9 @@
 		var npc 	= hurtEvent.Victim;
 
 		var hText 	=
-			"You hit "
-			npc.Name + 
-			" with " 		+
+			"You hit " 				+
+			npc.Name 				+ 
+			" with " 				+
 			hurtEvent.DamageType 	+
 			" damage for " 			+
 			hurtEvent.DamageAmount 	+ 
