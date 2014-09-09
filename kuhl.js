@@ -241,7 +241,30 @@
 					break;
 
 					case 'xp':
-						var msg 	= "XP: " + this.playerXP();
+						var msg 	= "XP: " + this.playerXP(player);
+						result 		= this.sendMsg(player, msg);
+					break;
+
+					case 'level':
+						var msg 	= "Level: " + this.playerLevel(player);
+						result 		= this.sendMsg(player, msg);
+					break;
+
+					case 'stats':
+						var msg 	= this.playerStats(player);
+						result 		= this.sendMsg(player, msg);
+					break;
+
+					case 'xpp':
+						result  	= this.playerGainXP(player, 'test_inc');
+					break;
+
+					case 'set_xp':
+						var store 	= this.store();
+						store.AddSetting(player.GameID, "xp", args[0]);
+						store.Save();
+
+						var msg 	= this.playerStats(player);
 						result 		= this.sendMsg(player, msg);
 					break;
 
@@ -271,6 +294,26 @@
 		 * Player
 		 */
 		
+		 	/**
+		 	 * Player Stats
+		 	 * @param  {[type]} player [description]
+		 	 * @return {[type]}        [description]
+		 	 */
+			this.playerStats 	= function(player) {
+				var level 		= this.playerLevel(player);
+				var xp 			= this.playerXP(player);
+				var sText 		= 
+					player.Name +
+					" | Level " +
+					level 		+
+					" | XP " 	+
+					xp 
+				;
+
+				return sText;
+			}
+		
+
 			/**
 			 * Player XP
 			 * @param  {[type]} player
@@ -278,11 +321,119 @@
 			 */
 			this.playerXP 		= function(player) {
 				var store 	= this.store();
-				var xp 		= store.GetSetting(player.GameID, "xp");
+				var xp 		= parseInt(store.GetSetting(player.GameID, "xp"));
 
-				if (!xp || parseInt(xp) <= 0) xp = 1;
+				if (!xp || parseInt(xp) < 1) xp = 0;
 				return xp;
 			}
+
+
+			/**
+			 * Player Level
+			 * @param  {[type]} player [description]
+			 * @return {[type]}        [description]
+			 */
+			this.playerLevel 	= function(player) {
+				var store 	= this.store();
+				var xp 		= this.playerXP(player);
+
+				var maxLvl 	= parseFloat(this.config("xp", "max_level"));
+				var scale 	= parseFloat(this.config("xp", "scale"));
+				var rate 	= parseFloat(this.config("xp", "rate"));
+				var step 	= (scale / 4);
+
+				var lastLvl = parseInt(store.GetSetting(player.GameID, "level"));
+				var level 	= ((Math.sqrt(scale * (rate * xp + step)) + (step * rate)) / maxLvl);
+				level 		= Math.floor(level);
+
+				if (level > lastLvl) {
+					this.playerGainLevel(player, level);
+					store.AddSetting(player.GameID, "level", level);
+					store.Save();
+				}
+
+				return level;
+			}
+
+
+			/**
+			 * Player Gain Level Event
+			 * @param  {[type]} player [description]
+			 * @param  {[type]} level  [description]
+			 * @return {[type]}        [description]
+			 */
+			this.playerGainLevel	= function(player, level) {
+				
+				var lText =
+					"You are now level " + level
+				;
+
+				this.sendMsg(player, ltext);
+				this.callback_level_gain(player, level);
+			}
+
+
+			/**
+			 * Player Gain XP
+			 * @param  {[type]} player     [description]
+			 * @param  {[type]} xpGainType [description]
+			 * @return {[type]}            [description]
+			 */
+			this.playerGainXP 		= function(player, xpGainType) {
+				var store 			= this.store();
+				var eventWeight 	= parseFloat(this.config("xp", xpGainType));
+				//var scale 			= parseFloat(this.config("xp", "scale"));
+
+				if (!eventWeight) return this;
+
+				var curXP 			= parseInt(this.playerXP(player));
+				var curLvl 			= this.playerLevel(player);
+				var incXP 			= (eventWeight);
+				var newXP 			= (incXP + curXP);
+
+				store.AddSetting(player.GameID, "xp", newXP);
+				store.Save();
+				store 				= '';
+
+				var newLvl 			= this.playerLevel(player);
+				var xText 			=
+					"XP++ (" + incXP + ") [" + newXP + "]"
+				;
+
+				this.sendMsg(player, xText, 'xp');
+				this.callback_xp_gain(player, xp);
+
+				return newXP;
+			}
+
+			this.playerLoseXP 		= function(player, xpLoseType) {
+				var store 			= this.store();
+				var eventWeight 	= parseFloat(this.config("xp", xpLoseType));
+				//var scale 			= parseFloat(this.config("xp", "scale"));
+
+				if (!eventWeight) return this;
+
+				var curXP 			= parseInt(this.playerXP(player));
+				var curLvl 			= this.playerLevel(player);
+				var decXP 			= (eventWeight);
+				var newXP 			= (curXP - decXP);
+
+				store.AddSetting(player.GameID, "xp", newXP);
+				store.Save();
+				store 				= '';
+
+				var newLvl 			= this.playerLevel(player);
+				var xText 			=
+					"XP-- (" + decXP + ") [XP: " + newXP + "]"
+				;
+
+				this.sendMsg(player, xText, 'xp');
+				this.callback_xp_gain(player, xp);
+
+				return newXP;
+			}
+
+
 		
 		
 
@@ -298,7 +449,7 @@
 			 */
 			this.playerHurt 	= function(player, hurtEvent) {
 
-				//this.playerLoseXP(player, 'player_hurt');
+				this.playerLoseXP(player, 'player_hurt_' + (hurtEvent.Attacker.Name).toLowerCase());
 				this.callback_player_hurt(player, hurtEvent);
 
 				return this;
@@ -313,7 +464,7 @@
 			 */
 			this.playerKilled 		= function(player, deathEvent) {
 
-				//this.playerLoseXP(player, 'player_killed');
+				this.playerLoseXP(player, 'player_killed');
 				this.callback_player_death(player, deathEvent);
 
 				return this;
@@ -329,7 +480,7 @@
 			 */
 			this.npcKilled 	= function(player, npc, deathEvent) {
 
-				//this.playerGainXP(player, 'npc_killed');
+				this.playerGainXP(player, 'npc_killed');
 				this.callback_npc_killed(player, npc, deathEvent);				
 
 				return this;	
@@ -345,7 +496,7 @@
 			 */
 			this.npcHurt 		= function(player, npc, hurtEvent) {
 
-				//this.playerGainXP(player, 'npc_hurt');
+				this.playerGainXP(player, 'npc_hurt');
 				this.callback_npc_hurt(player, npc, hurtEvent);
 
 				return this;
