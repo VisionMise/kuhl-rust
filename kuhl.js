@@ -257,6 +257,13 @@
 
 					case 'xpp':
 						result  	= this.playerGainXP(player, 'test_inc');
+
+						var msg 	= this.playerStats(player);
+						result 		= this.sendMsg(player, msg);
+					break;
+
+					case 'add':
+						result 		= this.playerAddItem(player, args[0].replace('_', ' '), args[1]);
 					break;
 
 					case 'set_xp':
@@ -342,15 +349,8 @@
 				var rate 	= parseFloat(this.config("xp", "rate"));
 				var step 	= (scale / 4);
 
-				var lastLvl = parseInt(store.GetSetting(player.GameID, "level"));
 				var level 	= ((Math.sqrt(scale * (rate * xp + step)) + (step * rate)) / maxLvl);
 				level 		= Math.floor(level);
-
-				if (level > lastLvl) {
-					this.playerGainLevel(player, level);
-					store.AddSetting(player.GameID, "level", level);
-					store.Save();
-				}
 
 				return level;
 			}
@@ -363,13 +363,16 @@
 			 * @return {[type]}        [description]
 			 */
 			this.playerGainLevel	= function(player, level) {
-				
-				var lText =
+				var item 	= this.config("levels", level).split(',');
+				var lText 	=
 					"You are now level " + level
 				;
 
-				this.sendMsg(player, ltext);
+				this.sendMsg(player, lText, 'level');
+				this.playerAddItem(player, item[0], item[1]);
+				
 				this.callback_level_gain(player, level);
+
 			}
 
 
@@ -400,12 +403,45 @@
 					"XP++ (" + incXP + ") [" + newXP + "]"
 				;
 
+
 				this.sendMsg(player, xText, 'xp');
 				this.callback_xp_gain(player, xp);
+
+				if (newLvl > curLvl) {
+					this.playerGainLevel(player, newLvl);
+					store.AddSetting(player.GameID, "level", newLvl);
+					store.Save();
+				}
 
 				return newXP;
 			}
 
+
+			this.playerAddItem 		= function(player, item, count) {
+
+				item 				= item.replace(/_/gi, ' ');
+				player.Inventory.AddItem(item, count);
+
+				var iText = 
+					"x"		+
+					count 	+
+					" " 	+
+					item 	+
+					" added to your inventory"
+				;
+
+				this.sendMsg(player, iText, 'inventory');
+				return this;
+			}
+
+
+
+			/**
+			 * Player Lose XP
+			 * @param  {[type]} player     [description]
+			 * @param  {[type]} xpLoseType [description]
+			 * @return {[type]}            [description]
+			 */
 			this.playerLoseXP 		= function(player, xpLoseType) {
 				var store 			= this.store();
 				var eventWeight 	= parseFloat(this.config("xp", xpLoseType));
