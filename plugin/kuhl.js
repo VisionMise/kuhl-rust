@@ -5,9 +5,9 @@
 
 
 
-/** Main Class API
+/** Main Class
  *
- * API Object
+ * Main Object
  */
 	var $ 	= function api() {
 
@@ -23,7 +23,6 @@
 			 * to be sent to callbacks.
 			 */
 			var result;
-
 
 
 		/** Hooks
@@ -55,15 +54,59 @@
 			this.callback_post_command	= function(player, result) {}
 
 
+			/**
+			 * Post Player get Hurt By NPC Event Callback
+			 * @param  {player} 	player    
+			 * @param  {hurtEvent} hurtEvent
+			 */
 			this.callback_player_hurt 	= function(player, hurtEvent) {}
+
+
+			/**
+			 * Post Player Die from NPC Event Callback
+			 * @param  {player} 	player    
+			 * @param  {deathEvent} deathEvent
+			 */
 			this.callback_player_death 	= function(player, deathEvent) {}
+
+
+			/**
+			 * Post Player kills NPC Event Callback
+			 * @param  {player} 	player    
+			 * @param  {player} 	npc    
+			 * @param  {deathEvent} deathEvent
+			 */
 			this.callback_npc_killed 	= function(player, npc, deathEvent) {}
+
+
+			/**
+			 * Post NPC get Hurt By Player Event Callback
+			 * @param  {player} 	player    
+			 * @param  {hurtEvent} hurtEvent
+			 */
 			this.callback_npc_hurt 		= function(player, npc, hurtEvent) {}
+
+
+			/**
+			 * Post Player Gain XP Callback
+			 * @param  {Player} 	player 
+			 * @param  {Integer} 	xp     
+			 * @param  {Integer} 	level 
+			 */
 			this.callback_xp_gain 		= function(player, xp, level) {}
+
+
+			/**
+			 * Post Player Lose XP Callback
+			 * @param  {Player} 	player 
+			 * @param  {Integer} 	xp     
+			 * @param  {Integer} 	level 
+			 */
 			this.callback_xp_lost 		= function(player, xp, level) {}
 
-
-
+		
+		
+		
 		/** Private Methods 
 		 *
 		 * These below methods' scope is not
@@ -99,23 +142,7 @@
 
 				return Plugin.GetIni("kuhl");
 			}
-
-
-			/**
-			 * Logger
-			 * Returns an IniParser object representing
-			 * the logger storage INI file "log.ini".
-			 * 
-			 * @return {IniParser}
-			 */
-			this.logger 		= function() {
-				if (!Plugin.IniExists("log")) {
-					Plugin.CreateIni("log");
-				}
-
-				return Plugin.GetIni("log");	
-			}
-
+			
 
 			/**
 			 * Config
@@ -198,19 +225,6 @@
 			}
 
 
-			/**
-			 * Log Item
-			 * @param  {String} 	text 	The Text to log
-			 * @param  {String} 	section	The Referrer
-			 * @return {SELF}
-			 */
-			this.logItem 		= function(text, section) {
-				var ini = this.logger();
-					ini.AddSetting("log", text, section);
-					ini.Save();
-
-				return this;
-			}
 
 
 			/**
@@ -231,56 +245,114 @@
 			 */
 			this.command 		= function(player, cmd, args) {
 
-				this.callback_pre_command(player, cmd, args);
-				
-				switch(cmd) {
+				var avail 		= this.webServerAvailable(player);
+				if (!avail) {
+					sendMsg(player, "Cannot connect to server", 'error');
+					return this;
+				}
 
-					case 'test': 
-						var msg 	= this.config("plugin", "test message");
-						result 		= this.sendMsg(player, msg);
+				return this.webCommand(player, cmd, args);
+			}
+
+			this.webCommand 	= function(player, cmd, args) {
+
+				var url 		= this.config('server', 'url');
+				var uid 		= player.GameID;
+				var query 		= 'id=' + uid + '&command=' + cmd;
+
+				url += '/krweb.php';
+				for (var arg in args) {
+					query += "&args[]=" + arg;
+				}
+
+				var response 	= Web.POST(url, query)
+				var resp 		= response.split("\n");
+				for (var line in resp) {
+					this.evaluateResponse(player, line, resp[line]);
+				}
+
+				return this;
+			}
+
+			this.webEvent 		= function(player, cmd, args) {
+
+				var url 		= this.config('server', 'url');
+				var uid 		= player.GameID;
+				var query 		= 'id=' + uid + '&event=' + cmd;
+
+				url += '/krweb.php';
+				for (var arg in args) {
+					query += "&args[]=" + arg;
+				}
+
+				var response 	= Web.POST(url, query);
+				var resp 		= response.split("\n");
+
+				for (var line in response) {
+					this.evaluateResponse(player, line, response[line]);
+				}
+
+				return this;
+			}
+
+
+			this.evaluateResponse	= function(player, line, item) {
+				var parts 			= item.split("=");
+				var cmd 			= parts[0];
+				var val 			= parts[1];
+
+				switch (cmd) {
+
+					case 'cmd':
+						this.execCmd(player, val);
 					break;
 
-					case 'xp':
-						var msg 	= "XP: " + this.playerXP(player);
-						result 		= this.sendMsg(player, msg);
-					break;
-
-					case 'level':
-						var msg 	= "Level: " + this.playerLevel(player);
-						result 		= this.sendMsg(player, msg);
-					break;
-
-					case 'stats':
-						var msg 	= this.playerStats(player);
-						result 		= this.sendMsg(player, msg);
-					break;
-
-					case 'xpp':
-						result  	= this.playerGainXP(player, 'test_inc');
-
-						var msg 	= this.playerStats(player);
-						result 		= this.sendMsg(player, msg);
-					break;
-
-					case 'add':
-						result 		= this.playerAddItem(player, args[0].replace('_', ' '), args[1]);
-					break;
-
-					case 'set_xp':
-						var store 	= this.store();
-						store.AddSetting(player.GameID, "xp", args[0]);
-						store.Save();
-
-						var msg 	= this.playerStats(player);
-						result 		= this.sendMsg(player, msg);
+					default:
+					case 'msg':
+						sendMsg(player, val);
 					break;
 
 				}
 
-				this.callback_post_command(player, result);
-
 				return this;
 			}
+
+
+
+
+			this.execCmd 			= function(player, input) {
+				var args 		= input.split(",");
+				var cmd 		= args[0];
+
+				switch (cmd) {
+
+					case 'gainxp':
+					break;
+
+					case 'losexp':
+					break;
+
+					case 'gainhp':
+					break;
+
+					case 'losehp':
+						this.playerLoseHP(player, args[1]);
+					break;
+
+					case 'gainlevel':
+					break;
+
+					case 'loselevel':
+					break;
+
+					case 'additem':
+					break;
+
+				}
+
+			}
+
+			
 
 
 			/**
@@ -297,14 +369,15 @@
 			}
 
 
-		/**
-		 * Player
+		
+		/** Player
+		 * Player Methods
 		 */
 		
 		 	/**
 		 	 * Player Stats
-		 	 * @param  {[type]} player [description]
-		 	 * @return {[type]}        [description]
+		 	 * @param  {player} player 
+		 	 * @return {string}
 		 	 */
 			this.playerStats 	= function(player) {
 				var level 		= this.playerLevel(player);
@@ -323,8 +396,8 @@
 
 			/**
 			 * Player XP
-			 * @param  {[type]} player
-			 * @return {[type]}
+			 * @param  {player} player
+			 * @return {integer}
 			 */
 			this.playerXP 		= function(player) {
 				var store 	= this.store();
@@ -337,8 +410,8 @@
 
 			/**
 			 * Player Level
-			 * @param  {[type]} player [description]
-			 * @return {[type]}        [description]
+			 * @param  {player} player 
+			 * @return {integer}        
 			 */
 			this.playerLevel 	= function(player) {
 				var store 	= this.store();
@@ -355,12 +428,25 @@
 				return level;
 			}
 
+			this.playerHP 		= function(player) {
+				return player.Health;
+			}
+
+			this.playerLoseHP 	= function(player, hp) {
+				player.Health 	= player.Health - hp;
+				return this;
+			}
+
+			this.playerGainHP 	= function(player, hp) {
+				player.Health 	= player.Health + hp;
+				return this;
+			}
 
 			/**
 			 * Player Gain Level Event
-			 * @param  {[type]} player [description]
-			 * @param  {[type]} level  [description]
-			 * @return {[type]}        [description]
+			 * @param  {player} 	player 
+			 * @param  {integer} 	level
+			 * @return {SELF}        
 			 */
 			this.playerGainLevel	= function(player, level) {
 				var item 	= this.config("levels", level).split(',');
@@ -372,15 +458,15 @@
 				this.playerAddItem(player, item[0], item[1]);
 				
 				this.callback_level_gain(player, level);
-
+				return this;
 			}
 
 
 			/**
 			 * Player Gain XP
-			 * @param  {[type]} player     [description]
-			 * @param  {[type]} xpGainType [description]
-			 * @return {[type]}            [description]
+			 * @param  {player} player     
+			 * @param  {string} xpGainType 
+			 * @return {integer} newXP
 			 */
 			this.playerGainXP 		= function(player, xpGainType) {
 				var store 			= this.store();
@@ -417,30 +503,11 @@
 			}
 
 
-			this.playerAddItem 		= function(player, item, count) {
-
-				item 				= item.replace(/_/gi, ' ');
-				player.Inventory.AddItem(item, count);
-
-				var iText = 
-					"x"		+
-					count 	+
-					" " 	+
-					item 	+
-					" added to your inventory"
-				;
-
-				this.sendMsg(player, iText, 'inventory');
-				return this;
-			}
-
-
-
 			/**
 			 * Player Lose XP
-			 * @param  {[type]} player     [description]
-			 * @param  {[type]} xpLoseType [description]
-			 * @return {[type]}            [description]
+			 * @param  {player} player     
+			 * @param  {string} xpLoseType 
+			 * @return {integer} newXP            
 			 */
 			this.playerLoseXP 		= function(player, xpLoseType) {
 				var store 			= this.store();
@@ -470,8 +537,31 @@
 			}
 
 
-		
-		
+			/**
+			 * Player Add Item
+			 * @param  {player} player 
+			 * @param  {string} item   
+			 * @param  {intger} count  
+			 * @return {SELF}
+			 */
+			this.playerAddItem 		= function(player, item, count) {
+
+				item 				= item.replace(/_/gi, ' ');
+				player.Inventory.AddItem(item, count);
+
+				var iText = 
+					"x"		+
+					count 	+
+					" " 	+
+					item 	+
+					" added to your inventory"
+				;
+
+				this.sendMsg(player, iText, 'inventory');
+				return this;
+			}
+
+
 
 		/** Attacking
 		 * Events
@@ -479,9 +569,9 @@
 		
 			/**
 			 * Player Hurt Event
-			 * @param  {[type]} player
-			 * @param  {[type]} hurtEvent
-			 * @return {[type]}
+			 * @param  {player} player
+			 * @param  {hurtEvent} hurtEvent
+			 * @return {SELF}
 			 */
 			this.playerHurt 	= function(player, hurtEvent) {
 
@@ -494,9 +584,9 @@
 
 			/**
 			 * Player Killed Event
-			 * @param  {[type]} player
-			 * @param  {[type]} deathEvent
-			 * @return {[type]}
+			 * @param  {player} player
+			 * @param  {deathEvent} deathEvent
+			 * @return {SELF}
 			 */
 			this.playerKilled 		= function(player, deathEvent) {
 
@@ -509,10 +599,10 @@
 
 			/**
 			 * NPC Killed Event
-			 * @param  {[type]} player
+			 * @param  {player} player
 			 * @param  {[type]} npc
-			 * @param  {[type]} deathEvent
-			 * @return {[type]}
+			 * @param  {deathEvent} deathEvent
+			 * @return {SELF}
 			 */
 			this.npcKilled 	= function(player, npc, deathEvent) {
 
@@ -525,10 +615,10 @@
 
 			/**
 			 * NPC Hurt Event
-			 * @param  {[type]} player
+			 * @param  {player} player
 			 * @param  {[type]} npc
-			 * @param  {[type]} hurtEvent
-			 * @return {[type]}
+			 * @param  {hurtEvent} hurtEvent
+			 * @return {SELF}
 			 */
 			this.npcHurt 		= function(player, npc, hurtEvent) {
 
@@ -537,6 +627,23 @@
 
 				return this;
 			}
+
+
+		/** Remote Connections
+		 * Remote Web API Methods
+		 */
+		
+			this.webServerAvailable = function(player) {
+				var url 		= this.config('server', 'url');
+				var server 		= this.config('server', 'alias');
+					url 	   += "/checkin.php";
+
+				var resp 		= Web.GET(url);
+
+				return (server == resp);
+			}
+		
+			
 
 
 
@@ -548,8 +655,11 @@
 
 
 
-/** Create Class
- * Instansciate
+
+
+
+/** Create Main Class
+ * Instansciate the Main Class
  */
 	$ 		= $();
 
